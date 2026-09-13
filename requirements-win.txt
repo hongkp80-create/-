@@ -1,0 +1,4 @@
+# 트랙 C: Windows 전용 - faster-whisper + CapCut 자동 export 보너스(uiautomation)
+-r requirements.txt
+faster-whisper>=1.0
+uiautomation>=2.0; sys_platform == "win32"

@@ -1,0 +1,3 @@
+# 트랙 A: Mac (Apple Silicon) 전용 - mlx-whisper 사용
+-r requirements.txt
+mlx-whisper>=0.4

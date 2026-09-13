@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>캡컷 에이전트</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --card: #161616;
+    --card-2: #1c1c1c;
+    --border: #262626;
+    --text: #e5e5e5;
+    --text-dim: #8a8a8a;
+    --text-faint: #555;
+    --accent: #22c55e;
+    --accent-glow: rgba(34, 197, 94, 0.55);
+    --danger: #ef4444;
+    --warn: #eab308;
+    --mono: "SF Mono", "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+  }
+  body { padding: 32px 20px 80px; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .sub { color: var(--text-dim); font-size: 12px; margin: 0 0 24px; }
+
+  .envbar {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; color: var(--text-dim);
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
+    margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .envbar .chip { color: var(--text); }
+  .envbar input {
+    background: transparent; border: none; border-bottom: 1px dashed var(--text-faint);
+    color: var(--text); font-family: var(--mono); font-size: 11px; padding: 2px 0; min-width: 220px;
+  }
+  .envbar input:focus { outline: none; border-bottom-color: var(--accent); }
+  .env-fail { color: var(--warn); }
+
+  .chip {
+    display: inline-block; font-family: var(--mono); font-size: 11px;
+    background: var(--card-2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px; color: var(--text-dim);
+  }
+
+  .drop {
+    border: 1px dashed var(--border); border-radius: 8px;
+    padding: 40px 20px; text-align: center; color: var(--text-dim);
+    cursor: pointer; transition: border-color 0.15s, color 0.15s;
+  }
+  .drop:hover, .drop.drag { border-color: var(--accent); color: var(--text); }
+  .drop .hint { font-size: 11px; margin-top: 6px; color: var(--text-faint); }
+  input[type=file] { display: none; }
+
+  .card {
+    border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px;
+    margin-top: 16px; background: var(--card);
+  }
+
+  .steps { display: flex; flex-direction: column; gap: 0; }
+  .step {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 0; border-bottom: 1px solid var(--border);
+  }
+  .step:last-child { border-bottom: none; }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint);
+    flex-shrink: 0; transition: background 0.2s, box-shadow 0.2s;
+  }
+  .step.active .dot { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-glow); animation: pulse 1.1s ease-in-out infinite; }
+  .step.done .dot { background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
+  .step.error .dot { background: var(--danger); }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .step .label { width: 130px; flex-shrink: 0; color: var(--text-dim); }
+  .step.active .label, .step.done .label { color: var(--text); }
+  .step .msg { color: var(--text-dim); font-size: 12px; }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; text-align: left; }
+  .stats .stat { padding-right: 16px; }
+  .stats .stat .num { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stats .stat .lbl { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  .transcript { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow-y: auto; }
+  .seg { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+  .seg .ts { color: var(--text-faint); font-variant-numeric: tabular-nums; width: 46px; flex-shrink: 0; }
+  .seg .txt { color: var(--text); flex: 1; }
+  .seg.cut .txt { color: var(--text-faint); text-decoration: line-through; }
+  .tag { font-size: 10px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--border); color: var(--text-dim); flex-shrink: 0; }
+  .tag.ng_retake { color: var(--danger); border-color: var(--danger); }
+  .tag.ng_duplicate { color: var(--warn); border-color: var(--warn); }
+  .tag.filler { color: var(--text-dim); }
+  .tag.keep { color: var(--accent); border-color: var(--accent); }
+
+  .draftpath { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text);
+    font-family: var(--mono); font-size: 11px; padding: 5px 10px; border-radius: 5px; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { border-color: var(--accent); color: var(--accent); }
+
+  video { width: 100%; border-radius: 6px; background: #000; display: block; }
+  .timeline { position: relative; height: 20px; margin-top: 10px; background: var(--card-2); border-radius: 4px; overflow: hidden; }
+  .timeline .seg-bar { position: absolute; top: 0; bottom: 0; background: #2a2a2a; }
+  .timeline .seg-bar.keep { background: rgba(34, 197, 94, 0.35); }
+  .timeline .preserve-bar { position: absolute; top: 0; bottom: 0; background: rgba(234, 179, 8, 0.5); border-left: 1px solid var(--warn); border-right: 1px solid var(--warn); }
+  .timeline .playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: #fff; }
+
+  .marklist { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; font-size: 11px; }
+  .markrow { display: flex; align-items: center; gap: 8px; color: var(--text-dim); }
+  .markrow .x { cursor: pointer; color: var(--text-faint); }
+  .markrow .x:hover { color: var(--danger); }
+
+  .footer-hint { color: var(--text-faint); font-size: 11px; margin-top: 8px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>캡컷 에이전트</h1>
+  <p class="sub">mp4/mov → 무음·잔말·NG 컷 + 단어별 자막이 들어간 캡컷 드래프트</p>
+
+  <div class="envbar" id="envbar">환경 확인 중...</div>
+
+  <div class="drop" id="drop">
+    영상을 여기로 드래그하거나 클릭해서 선택하세요
+    <div class="hint">mp4 / mov 지원</div>
+    <input type="file" id="fileInput" accept=".mp4,.mov,video/mp4,video/quicktime" />
+  </div>
+
+  <div class="card hidden" id="stepperCard">
+    <div class="steps" id="steps"></div>
+  </div>
+
+  <div class="card hidden" id="resultCard">
+    <div class="stats" id="stats"></div>
+    <hr />
+    <div class="transcript" id="transcript"></div>
+    <hr />
+    <div class="draftpath">
+      <span class="chip" id="draftPath">-</span>
+      <button class="btn" id="copyPathBtn">경로 복사</button>
+    </div>
+    <p class="footer-hint">빌드 성공 ≠ 검증입니다. 캡컷 앱에서 이 드래프트를 열어 직접 재생해보세요.</p>
+  </div>
+
+  <div class="card hidden" id="previewCard">
+    <video id="previewVideo" controls></video>
+    <div class="timeline" id="timeline"></div>
+    <div class="footer-hint">재생 중 <span class="chip">[</span> 보존 구간 시작 · <span class="chip">]</span> 보존 구간 끝. 필러/NG로 잘릴 예정이어도 보존 구간은 항상 유지됩니다.</div>
+    <div class="marklist" id="marklist"></div>
+    <div style="margin-top:10px;">
+      <button class="btn primary" id="rebuildBtn">보존 구간 반영해서 드래프트 재생성</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+
+let state = {
+  videoId: null,
+  duration: 0,
+  keepRanges: [],
+  preserveRanges: [],
+  draftName: "capcut_agent_draft",
+};
+
+const STAGE_LABELS = {
+  silence: "무음 탐지",
+  asr: "전체 대본 추출",
+  filler: "잔말/NG 판단",
+  draft: "드래프트 생성",
+};
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = (s % 60).toFixed(1).padStart(4, "0");
+  return `${m}:${sec}`;
+}
+
+async function loadEnv() {
+  const bar = $("#envbar");
+  try {
+    const res = await fetch("/api/env");
+    const env = await res.json();
+    const settings = await (await fetch("/api/settings")).json();
+    const trackLabel = { mac: "Mac (mlx-whisper)", windows: "Windows (faster-whisper)", fallback: "fallback (faster-whisper)" }[env.track] || env.track;
+    const fails = env.checks.filter(c => !c.ok);
+    bar.innerHTML = `
+      <span class="chip">${env.os_name}/${env.machine}</span>
+      <span>${trackLabel}</span>
+      <span>드래프트 폴더:</span>
+      <input id="draftFolderInput" value="${settings.draft_folder || ''}" placeholder="CapCut 드래프트 폴더 경로 입력" />
+      ${fails.length ? `<span class="env-fail">누락: ${fails.map(f => f.name).join(', ')}</span>` : '<span style="color:var(--accent)">준비 완료</span>'}
+    `;
+    $("#draftFolderInput").addEventListener("change", async (e) => {
+      await fetch("/api/settings", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draft_folder: e.target.value }),
+      });
+    });
+  } catch (e) {
+    bar.textContent = "환경 확인 실패: " + e;
+  }
+}
+
+function setupDrop() {
+  const drop = $("#drop");
+  const input = $("#fileInput");
+  drop.addEventListener("click", () => input.click());
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault();
+    drop.classList.remove("drag");
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  input.addEventListener("change", (e) => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+}
+
+async function handleFile(file) {
+  $("#resultCard").classList.add("hidden");
+  $("#previewCard").classList.add("hidden");
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/api/upload", { method: "POST", body: form });
+  if (!res.ok) { alert("업로드 실패: " + (await res.text())); return; }
+  const data = await res.json();
+  state.videoId = data.video_id;
+  state.fileName = file.name;
+  runPipeline();
+}
+
+function renderSteps() {
+  const steps = $("#steps");
+  steps.innerHTML = Object.entries(STAGE_LABELS).map(([key, label]) => `
+    <div class="step" id="step-${key}">
+      <div class="dot"></div>
+      <div class="label">${label}</div>
+      <div class="msg" id="msg-${key}"></div>
+    </div>
+  `).join("");
+}
+
+function setStep(stage, status, message) {
+  const el = $(`#step-${stage}`);
+  if (!el) return;
+  el.classList.remove("active", "done", "error");
+  el.classList.add(status);
+  $(`#msg-${stage}`).textContent = message || "";
+}
+
+function runPipeline() {
+  $("#stepperCard").classList.remove("hidden");
+  renderSteps();
+  const url = `/api/process/${state.videoId}/stream?draft_name=${encodeURIComponent(state.draftName)}`;
+  const es = new EventSource(url);
+
+  es.addEventListener("stage", (e) => {
+    const d = JSON.parse(e.data);
+    setStep(d.stage, d.status === "start" ? "active" : "done", d.message);
+  });
+
+  es.addEventListener("complete", (e) => {
+    const d = JSON.parse(e.data);
+    es.close();
+    showResult(d);
+    setupPreview(d);
+  });
+
+  es.addEventListener("error", (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      alert("오류: " + d.message);
+    } catch (_) {}
+    es.close();
+  });
+}
+
+function showResult(d) {
+  $("#resultCard").classList.remove("hidden");
+  const orig = d.transcript.segments.length ? Math.max(...d.transcript.segments.map(s => s.end)) : 0;
+  const finalDur = d.keep_ranges.reduce((acc, r) => acc + (r[1] - r[0]), 0);
+  const saved = orig > 0 ? Math.round((1 - finalDur / orig) * 100) : 0;
+
+  $("#stats").innerHTML = `
+    <div class="stat"><div class="num">${fmtTime(orig)}</div><div class="lbl">원본 길이</div></div>
+    <div class="stat"><div class="num">${fmtTime(finalDur)}</div><div class="lbl">최종 길이</div></div>
+    <div class="stat"><div class="num">${saved}%</div><div class="lbl">절감</div></div>
+  `;
+
+  const cutRanges = d.decisions.map(dd => ({ start: dd.start, end: dd.end, kind: dd.kind, note: dd.note }));
+  const transcriptEl = $("#transcript");
+  transcriptEl.innerHTML = d.transcript.segments.map(seg => {
+    const cut = cutRanges.find(c => seg.start >= c.start - 0.05 && seg.end <= c.end + 0.05);
+    const tag = cut ? `<span class="tag ${cut.kind}">${labelForKind(cut.kind)}</span>` : `<span class="tag keep">유지</span>`;
+    return `<div class="seg ${cut ? 'cut' : ''}"><span class="ts">${fmtTime(seg.start)}</span>${tag}<span class="txt">${escapeHtml(seg.text)}</span></div>`;
+  }).join("");
+
+  $("#draftPath").textContent = d.draft_path;
+  $("#copyPathBtn").onclick = () => navigator.clipboard.writeText(d.draft_path);
+
+  state.keepRanges = d.keep_ranges;
+}
+
+function labelForKind(kind) {
+  return { ng_retake: "NG", ng_duplicate: "중복", filler: "필러" }[kind] || kind;
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function setupPreview(d) {
+  $("#previewCard").classList.remove("hidden");
+  const video = $("#previewVideo");
+  video.src = `/api/video/${state.videoId}`;
+
+  video.addEventListener("loadedmetadata", () => {
+    state.duration = video.duration;
+    renderTimeline();
+  });
+  video.addEventListener("timeupdate", renderTimeline);
+
+  let pendingMarkStart = null;
+  window.addEventListener("keydown", (e) => {
+    if (document.activeElement.tagName === "INPUT") return;
+    if (e.key === "[") {
+      pendingMarkStart = video.currentTime;
+    } else if (e.key === "]") {
+      if (pendingMarkStart !== null) {
+        const start = Math.min(pendingMarkStart, video.currentTime);
+        const end = Math.max(pendingMarkStart, video.currentTime);
+        if (end > start) {
+          state.preserveRanges.push([start, end]);
+          renderMarklist();
+          renderTimeline();
+        }
+        pendingMarkStart = null;
+      }
+    }
+  });
+
+  $("#rebuildBtn").onclick = async () => {
+    const res = await fetch("/api/mark", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_id: state.videoId, draft_name: state.draftName, preserve_ranges: state.preserveRanges }),
+    });
+    if (!res.ok) { alert("재생성 실패: " + (await res.text())); return; }
+    const data = await res.json();
+    state.keepRanges = data.keep_ranges;
+    $("#draftPath").textContent = data.draft_path;
+    renderTimeline();
+    alert("드래프트가 재생성되었습니다. 캡컷에서 다시 열어 확인해주세요.");
+  };
+
+  renderMarklist();
+  renderTimeline();
+}
+
+function renderMarklist() {
+  const el = $("#marklist");
+  if (!state.preserveRanges.length) { el.innerHTML = ""; return; }
+  el.innerHTML = state.preserveRanges.map((r, i) => `
+    <div class="markrow"><span class="x" data-i="${i}">✕</span> 보존 ${fmtTime(r[0])} - ${fmtTime(r[1])}</div>
+  `).join("");
+  el.querySelectorAll(".x").forEach(x => {
+    x.addEventListener("click", () => {
+      state.preserveRanges.splice(Number(x.dataset.i), 1);
+      renderMarklist();
+      renderTimeline();
+    });
+  });
+}
+
+function renderTimeline() {
+  const el = $("#timeline");
+  const dur = state.duration || 1;
+  let html = state.keepRanges.map(r => {
+    const left = (r[0] / dur) * 100;
+    const width = ((r[1] - r[0]) / dur) * 100;
+    return `<div class="seg-bar keep" style="left:${left}%;width:${width}%"></div>`;
+  }).join("");
+  html += state.preserveRanges.map(r => {
+    const left = (r[0] / dur) * 100;
+    const width = ((r[1] - r[0]) / dur) * 100;
+    return `<div class="preserve-bar" style="left:${left}%;width:${width}%"></div>`;
+  }).join("");
+  const video = $("#previewVideo");
+  if (video && video.currentTime != null) {
+    const left = (video.currentTime / dur) * 100;
+    html += `<div class="playhead" style="left:${left}%"></div>`;
+  }
+  el.innerHTML = html;
+}
+
+loadEnv();
+setupDrop();
+</script>
+</body>
+</html>
