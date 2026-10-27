@@ -105,9 +105,9 @@ class Renderer:
         elif kind == "photo_knuckle":
             im = cover(self.close, 0.42 + 0.05 * p, 0.58, 1.55 + 0.35 * ease(p))
         elif kind == "photo_face":  # 얼굴로 천천히 푸시인
-            im = cover(self.full, 0.5, self.face_y + 0.05, 1.05 + 0.3 * ease(p))
-        elif kind == "photo_out":  # 얼굴 클로즈업에서 전체로 줌아웃
-            im = cover(self.full, 0.5, self.face_y + 0.15 * ease(p), 1.8 - 0.75 * ease(p))
+            im = cover(self.full, 0.5, self.face_y + 0.05, 1.0 + 0.2 * ease(p))
+        elif kind == "photo_out":  # 전체에서 팔짱 낀 손으로 천천히 내려가며 푸시인
+            im = cover(self.full, 0.5 + 0.08 * ease(p), 0.5 + 0.22 * ease(p), 1.0 + 0.4 * ease(p))
         else:  # photo_full: 손에서 시작해 얼굴까지 끌어올리며 줌아웃
             q = ease(p)
             im = cover(self.full, 0.5, 0.68 - 0.33 * q, 1.9 - 0.85 * q)
@@ -272,7 +272,8 @@ class Renderer:
             title = "이소룡의 손"
             w = dr.textlength(title, font=f)
             a = ease(t_in / 0.4)
-            dr.text(((W - w) / 2, 330 - 40 * (1 - a)), title, font=f, fill=GOLD, stroke_width=10, stroke_fill=(0, 0, 0))
+            ty = 1300 if self.scenes is SINGLE_SCENES else 330  # 인물 사진은 얼굴을 가리지 않게 아래로
+            dr.text(((W - w) / 2, ty - 40 * (1 - a)), title, font=f, fill=GOLD, stroke_width=10, stroke_fill=(0, 0, 0))
         return np.asarray(img, np.float32)
 
     def frame(self, n):
