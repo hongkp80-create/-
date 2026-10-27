@@ -9,6 +9,9 @@ python make_short.py --photo hands.jpg --font NanumGothicExtraBold.ttf --no-voic
 ```
 
 - `--photo`: 좌(손 클로즈업) / 우(전신) 2분할 콜라주 이미지
+- `--layout single --photo <인물사진> [--face-y 0.3]`: 퍼블릭 도메인 인물 사진 1장용. 첫 장면과 마지막 장면에 사진을 쓰고,
+  손 클로즈업 장면은 굳은살 재연 그래픽으로 대체합니다. 후보: Wikimedia Commons
+  `File:Bruce-Lee-as-Kato-1967-retouched.jpg` (1967 ABC 홍보 사진. 저작권 표기 없이 발행돼 미국 퍼블릭 도메인이지만, 캐나다·중국·독일 등에서는 아직 보호될 수 있음)
 - 기본 출력에는 **가이드 나레이션**(오프라인 espeak-ng, 기계음)이 들어갑니다. 타이밍 확인용이니
   최종본은 `--no-voice` 버전을 CapCut에 올리고 아래 대본을 **CapCut 텍스트 읽기(TTS)** 로 입히세요.
 

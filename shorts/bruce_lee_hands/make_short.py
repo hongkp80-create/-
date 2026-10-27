@@ -6,6 +6,7 @@
 
 사용법:
   python make_short.py --photo hands.jpg --font NanumGothicExtraBold.ttf --out out.mp4
+  python make_short.py --layout single --photo kato_1967.jpg --font NanumGothicExtraBold.ttf --out out.mp4
 """
 import argparse
 import math
@@ -29,6 +30,14 @@ SCENES = [
     (15.6, 20.4, "inch", "재연 그래픽", "1964년, 단 1인치 거리의 펀치", "1인치"),
     (20.4, 24.8, "coin", "전해지는 일화", "손을 쥐기 전에 동전을 바꿔치기했다죠", "동전"),
     (24.8, 30.0, "photo_full", "실제 사진", "재능이 아니라, 반복이 만든 손", "반복"),
+]
+
+# --layout single: 퍼블릭 도메인 인물 사진 1장만 있을 때. 손 클로즈업은 재연 그래픽으로 대체.
+SINGLE_SCENES = [
+    (0.0, 3.6, "photo_face", "공개 사진", "이소룡, 그 손에 숨은 이야기", "손"),
+    (3.6, 7.6, "knuckles", "재연 그래픽", "마디마다 혹처럼 솟은 굳은살", "굳은살"),
+] + SCENES[2:6] + [
+    (24.8, 30.0, "photo_out", "공개 사진", "재능이 아니라, 반복이 만든 손", "반복"),
 ]
 
 SEPIA = np.array([236, 214, 178], np.float32)
@@ -66,13 +75,18 @@ def cover(img, cx, cy, zoom):
 
 # ---------------------------------------------------------------- 장면 그리기
 class Renderer:
-    def __init__(self, photo, font_path):
+    def __init__(self, photo, font_path, scenes=SCENES, face_y=0.3):
+        self.scenes = scenes
+        self.face_y = face_y
         src = Image.open(photo).convert("L")
         sw, sh = src.size
-        # 업로드 이미지는 좌우 2분할 콜라주: 좌=손 클로즈업, 우=전신
-        self.close = src.crop((0, 0, int(sw * 0.49), sh))
-        self.full = src.crop((int(sw * 0.505), 0, sw, sh)).filter(
-            ImageFilter.UnsharpMask(radius=2, percent=60))
+        if scenes is SINGLE_SCENES:
+            self.full = src.filter(ImageFilter.UnsharpMask(radius=2, percent=60))
+        else:
+            # 업로드 이미지는 좌우 2분할 콜라주: 좌=손 클로즈업, 우=전신
+            self.close = src.crop((0, 0, int(sw * 0.49), sh))
+            self.full = src.crop((int(sw * 0.505), 0, sw, sh)).filter(
+                ImageFilter.UnsharpMask(radius=2, percent=60))
         self.vig = make_vignette()
         self.bg = make_bg()
         self.font = lambda s: ImageFont.truetype(font_path, s)
@@ -90,10 +104,34 @@ class Renderer:
             im = cover(self.close, 0.5, 0.55 - 0.05 * p, 1.0 + 0.18 * ease(p))
         elif kind == "photo_knuckle":
             im = cover(self.close, 0.42 + 0.05 * p, 0.58, 1.55 + 0.35 * ease(p))
+        elif kind == "photo_face":  # 얼굴로 천천히 푸시인
+            im = cover(self.full, 0.5, self.face_y + 0.05, 1.05 + 0.3 * ease(p))
+        elif kind == "photo_out":  # 얼굴 클로즈업에서 전체로 줌아웃
+            im = cover(self.full, 0.5, self.face_y + 0.15 * ease(p), 1.8 - 0.75 * ease(p))
         else:  # photo_full: 손에서 시작해 얼굴까지 끌어올리며 줌아웃
             q = ease(p)
             im = cover(self.full, 0.5, 0.68 - 0.33 * q, 1.9 - 0.85 * q)
         return self.tone(im)
+
+    def knuckles(self, t, p, d):
+        """주먹 쥔 손등 - 마디마다 굳은살이 차오른다."""
+        img = Image.new("RGB", (W, H))
+        dr = ImageDraw.Draw(img)
+        skin, line = (215, 180, 145), (120, 85, 60)
+        dr.rounded_rectangle((200, 560, 880, 1260), 150, fill=skin, outline=line, width=8)
+        dr.rounded_rectangle((120, 900, 360, 1180), 110, fill=skin, outline=line, width=8)  # 엄지
+        grow = ease((t - 0.4) / 2.2)
+        for i in range(4):
+            x = 290 + i * 165
+            dr.line((x - 60, 700, x - 60, 1100), fill=line, width=5)
+            r = 30 + 38 * grow
+            y = 700 + 15 * (i % 2)
+            dr.ellipse((x - r, y - r * 0.8, x + r, y + r * 0.8), fill=(228, 200, 165), outline=line, width=6)
+            dr.ellipse((x - r * 0.5, y - r * 0.55, x - r * 0.05, y - r * 0.2), fill=(250, 235, 210))
+        ring = 120 + 25 * math.sin(t * 6)
+        cx = 535
+        dr.ellipse((cx - 420, 700 - ring, cx + 420, 700 + ring), outline=GOLD, width=8)
+        return np.asarray(img, np.float32), [("굳은살", 110, 330, GOLD)], None
 
     def dummy(self, t, p, d):
         img = Image.new("RGB", (W, H))
@@ -213,7 +251,7 @@ class Renderer:
         # 상단 라벨 (실제 사진 / 재연 그래픽 구분)
         f = self.font(40)
         tw = dr.textlength(tag, font=f)
-        colr = (200, 40, 40) if tag == "실제 사진" else (60, 60, 60)
+        colr = (200, 40, 40) if tag in ("실제 사진", "공개 사진") else (60, 60, 60)
         dr.rounded_rectangle((60, 150, 60 + tw + 50, 220), 14, fill=colr)
         dr.text((85, 158), tag, font=f, fill=(255, 255, 255))
         # 하단 자막 - 강조어 노란색, 살짝 팝업
@@ -239,8 +277,8 @@ class Renderer:
 
     def frame(self, n):
         t = n / FPS
-        idx = next(i for i, sc in enumerate(SCENES) if sc[0] <= t < sc[1] or i == len(SCENES) - 1)
-        sc = SCENES[idx]
+        idx = next(i for i, sc in enumerate(self.scenes) if sc[0] <= t < sc[1] or i == len(self.scenes) - 1)
+        sc = self.scenes[idx]
         s, e, kind = sc[:3]
         t_in, p = t - s, (t - s) / (e - s)
         extra, shake = [], 0
@@ -300,7 +338,7 @@ def espeak_tts(text, rate=175):
     return np.interp(np.arange(int(len(x) * SR / sr)) * sr / SR, np.arange(len(x)), x)
 
 
-def build_audio(path, voice=True):
+def build_audio(path, voice=True, scenes=SCENES):
     n = int(DUR * SR)
     t = np.arange(n) / SR
     rng = np.random.default_rng(3)
@@ -319,7 +357,7 @@ def build_audio(path, voice=True):
     hit = np.sin(2 * np.pi * (140 + 300 * np.exp(-k * 60)) * k) * np.exp(-k * 22) + rng.normal(0, 0.4, len(k)) * np.exp(-k * 40)
     m = np.arange(int(0.35 * SR)) / SR
     whoosh = np.convolve(rng.normal(0, 1, len(m)), np.ones(40) / 40, "same") * np.sin(np.pi * m / 0.35) ** 2
-    for i, sc in enumerate(SCENES):
+    for i, sc in enumerate(scenes):
         add(drum, sc[0], 0.7)
         if i:
             add(whoosh, max(sc[0] - 0.2, 0), 0.5)
@@ -331,7 +369,7 @@ def build_audio(path, voice=True):
     out = music
     if voice:
         vo = np.zeros(n)
-        for sc in SCENES:
+        for sc in scenes:
             v = espeak_tts(sc[4].replace("…", ","))
             i = int((sc[0] + 0.2) * SR)
             j = min(n, i + len(v))
@@ -351,12 +389,16 @@ def main():
     ap.add_argument("--photo", required=True)
     ap.add_argument("--font", required=True)
     ap.add_argument("--out", default="bruce_lee_hands_short.mp4")
+    ap.add_argument("--layout", choices=["collage", "single"], default="collage",
+                    help="collage=손클로즈업|전신 2분할 이미지, single=인물 사진 1장(퍼블릭 도메인 사진용)")
+    ap.add_argument("--face-y", type=float, default=0.3, help="single: 얼굴 중심의 세로 위치(0~1)")
     ap.add_argument("--no-voice", action="store_true", help="나레이션 없이 BGM/효과음만 (CapCut TTS 용)")
     a = ap.parse_args()
     out = Path(a.out)
     wav = out.with_suffix(".wav")
-    build_audio(wav, voice=not a.no_voice)
-    r = Renderer(a.photo, a.font)
+    scenes = SINGLE_SCENES if a.layout == "single" else SCENES
+    build_audio(wav, voice=not a.no_voice, scenes=scenes)
+    r = Renderer(a.photo, a.font, scenes, a.face_y)
     ff = subprocess.Popen([
         "ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
         "-r", str(FPS), "-i", "-", "-i", str(wav), "-c:v", "libx264", "-preset", "medium", "-crf", "20",
